@@ -70,7 +70,7 @@ thread itself.
 - Invoke `superpowers:brainstorming`: interactive Q&A → design doc written to
   `docs/superpowers/specs/` and committed → user approves.
 - Invoke `superpowers:writing-plans`: implementation plan written to
-  `docs/plans/` and committed → user approves.
+  `docs/superpowers/plans/` and committed → user approves.
 - Superpowers flows are used as-is, no modification.
 
 ### Phase 2 — Implementer (Opus subagents)
