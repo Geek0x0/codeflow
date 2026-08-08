@@ -15,7 +15,12 @@ per-phase model pinning, built entirely on top of the
 - Claude Code with plugin support.
 - The **superpowers** plugin installed and enabled. codeflow delegates all
   process logic to superpowers skills and stops with an error if they are
-  missing.
+  missing. Install it with:
+
+  ```
+  /plugin marketplace add obra/superpowers-marketplace
+  /plugin install superpowers@superpowers-marketplace
+  ```
 - Access to the Fable and Opus models.
 
 ## Install

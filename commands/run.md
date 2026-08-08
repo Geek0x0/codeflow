@@ -26,7 +26,8 @@ $ARGUMENTS is empty, first ask the user what to build.
 2. **Dependency guard:** the superpowers plugin must be available — check
    that the skill `superpowers:brainstorming` appears in your available
    skills. If missing, STOP and tell the user to install the superpowers
-   plugin first.
+   plugin first: `/plugin marketplace add obra/superpowers-marketplace`,
+   then `/plugin install superpowers@superpowers-marketplace`.
 
 ## Phase 1 — Planner (this session, Fable)
 

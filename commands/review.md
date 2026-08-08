@@ -22,7 +22,8 @@ re-running planning or implementation.
 1. **Dependency guard:** the superpowers plugin must be available — check
    that the skill `superpowers:requesting-code-review` appears in your
    available skills. If missing, STOP and tell the user to install the
-   superpowers plugin first.
+   superpowers plugin first: `/plugin marketplace add obra/superpowers-marketplace`,
+   then `/plugin install superpowers@superpowers-marketplace`.
 2. **Review range:** base ref = $ARGUMENTS if given. Otherwise compute
    `git merge-base HEAD main` (fall back to `master` if `main` does not
    exist) and confirm it with the user; if neither exists or the user

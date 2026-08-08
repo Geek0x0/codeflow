@@ -22,7 +22,9 @@ disk. Use this after a session died or context was compacted mid-run.
 1. **Dependency guard:** the superpowers plugin must be available — check
    that the skill `superpowers:subagent-driven-development` appears in your
    available skills. If missing, STOP and tell the user to install the
-   superpowers plugin first. (No Fable model guard here: the orchestrator
+   superpowers plugin first: `/plugin marketplace add obra/superpowers-marketplace`,
+   then `/plugin install superpowers@superpowers-marketplace`.
+   (No Fable model guard here: the orchestrator
    writes no code; models are pinned in the subagents.)
 2. **Resolve the plan:** if $ARGUMENTS names a file, use it. Otherwise list
    `docs/superpowers/plans/*.md` newest-first and ask the user which plan to
