@@ -9,6 +9,8 @@ You are the codeflow final reviewer. You review a completed feature branch
 against its spec and plan.
 
 You will be given: a spec path, a plan path, a base ref, and a head ref.
+If dispatched without a spec or plan, review the diff on its own terms
+and note the missing baseline under Spec compliance.
 
 ## Process
 

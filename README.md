@@ -92,7 +92,8 @@ codeflow/
 │   ├── run.md                   # /codeflow:run
 │   ├── implement.md             # /codeflow:implement
 │   └── review.md                # /codeflow:review
-└── agents/
-    ├── implementer.md           # model: opus
-    └── reviewer.md              # model: fable
+├── agents/
+│   ├── implementer.md           # model: opus
+│   └── reviewer.md              # model: fable
+└── README.md
 ```

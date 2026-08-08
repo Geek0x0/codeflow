@@ -28,7 +28,8 @@ disk. Use this after a session died or context was compacted mid-run.
    `docs/superpowers/plans/*.md` newest-first and ask the user which plan to
    execute. Read the plan fully.
 3. **Resume point:** find the first unchecked `- [ ]` step in the plan and
-   confirm with the user that this is where execution should resume.
+   confirm with the user that this is where execution should resume. If
+   every step is already checked, skip Phase 2 and go directly to Phase 3.
 4. **Locate the spec:** use the spec path referenced in the plan header; if
    absent, ask the user.
 
@@ -44,7 +45,7 @@ disk. Use this after a session died or context was compacted mid-run.
    - isolate in a worktree via the `superpowers:using-git-worktrees` skill.
    Do NOT start implementation until the user has confirmed. Record the
    review base for Phase 3: the branch point of the feature branch
-   (`git merge-base HEAD <parent-branch>` or the recorded branch-gate rev),
+   (`git merge-base HEAD <parent-branch>`, or a rev the user provides),
    confirmed with the user.
 2. Invoke the `superpowers:subagent-driven-development` skill with ONE
    substitution: dispatch every per-task implementation subagent as agent
