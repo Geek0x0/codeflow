@@ -25,16 +25,22 @@ per-phase model pinning, built entirely on top of the
 
 ## Install
 
-From a marketplace that carries this plugin:
+This repo is itself a single-plugin marketplace. Once it is pushed to a
+git host (e.g. `github.com/<you>/codeflow`):
 
 ```
-/plugin install codeflow@<marketplace-name>
+/plugin marketplace add <you>/codeflow
+/plugin install codeflow@codeflow-marketplace
 ```
 
-For local development, load the repo as a local plugin directory (see
-`claude --help` for the plugin dev flag in your version, e.g.
-`claude --plugin-dir /path/to/codeflow`), or add the repo to a local
-marketplace of your own.
+GitHub accepts the `owner/repo` shorthand; for other hosts or private
+repos use the full git URL (HTTPS or SSH — resolved with your local git
+credentials). To pick up a new version later, run
+`/plugin marketplace update codeflow-marketplace`.
+
+For local development, load the repo as a local plugin directory (e.g.
+`claude --plugin-dir /path/to/codeflow`), or add the checkout as a local
+marketplace: `/plugin marketplace add /path/to/codeflow`.
 
 ## Usage
 
@@ -92,7 +98,9 @@ some Claude Code versions register plugin agents under bare names
 
 ```
 codeflow/
-├── .claude-plugin/plugin.json   # manifest
+├── .claude-plugin/
+│   ├── plugin.json              # manifest
+│   └── marketplace.json         # self-hosted single-plugin marketplace
 ├── commands/
 │   ├── run.md                   # /codeflow:run
 │   ├── implement.md             # /codeflow:implement

@@ -1,0 +1,11 @@
+{
+  "name": "codeflow-marketplace",
+  "owner": { "name": "Kody", "email": "kaidi.shi.1121@gmail.com" },
+  "plugins": [
+    {
+      "name": "codeflow",
+      "source": "./",
+      "description": "Three-phase workflow: Fable planner → Opus implementers → Fable reviewer"
+    }
+  ]
+}
