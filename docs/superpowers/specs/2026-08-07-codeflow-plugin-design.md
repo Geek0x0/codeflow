@@ -316,6 +316,73 @@ three gaps the design review missed, all now fixed in `commands/run.md`,
    the planner only reads them. `agents/planner.md`'s Rules section gained
    the matching prohibition on the subagent side.
 
+## v0.3 — Codex-executed implementation
+
+**Problem:** the user's global CLAUDE.md establishes a standing policy —
+Claude orchestrates, Codex MCP executes implementation, by default, for
+every project. codeflow's Phase 2/3, as designed in v0.1/v0.2, introduced a
+third role the policy never named: a *pinned Claude-model agent*
+(`codeflow:implementer`, `model: opus`) doing the actual coding — neither
+"the orchestrating Claude directly" nor "Codex." This was flagged twice
+during live use: once when building codeflow itself (Claude subagents did
+the SDD execution instead of Codex), once when running codeflow on a target
+project (Phase 2 dispatched an Opus Claude agent instead of Codex). The
+first instance was a process mistake with no design justification. The
+second was defended at the time as an explicit, deliberate project
+requirement — but that defense was the assistant's own unilateral reading,
+never confirmed by the user, and the user rejected it on repeat: the
+tension is real, not resolved by asserting an exception.
+
+**Decision:** redesign Phase 2 so Codex MCP executes every implementation
+unit — both per-task work during the plan and Phase 3's fix-loop — with
+Claude retaining every review/orchestration role it already had (task-level
+review, Phase 3's Fable final review, ledger/loop control). Phase 3's review
+role is unaffected: Fable still reviews, and still never writes code. Only
+the *implementer* role changes from a pinned Claude agent to Codex.
+
+**Consequence:** `agents/implementer.md` is removed — codeflow no longer
+dispatches any Opus-model agent anywhere. Opus drops out of the plugin
+entirely; codeflow becomes a two-model design (Fable plans and reviews,
+Codex implements), not three.
+
+**Mechanism:**
+- `superpowers:subagent-driven-development`'s own ledger, per-task review,
+  and fix-loop *structure* stays exactly as the skill describes — only the
+  "dispatch the implementer" step changes. Each task's brief is extracted
+  the same way; the dispatch target becomes `mcp__codex__codex`, called
+  with this project's standing Codex conventions (`cwd` = repo root,
+  `model: gpt-5.6-sol`, `sandbox: workspace-write`,
+  `approval-policy: never`, `config.model_reasoning_effort: xhigh`), and
+  `developer-instructions` carrying the TDD/coverage/never-push/report
+  contract that used to live in `agents/implementer.md`'s own system
+  prompt — that text now has to travel with every dispatch instead of
+  living in a reusable agent file.
+- **Per-task correction rounds (still inside Phase 2's loop) use
+  `mcp__codex__codex-reply` on that task's own thread** — matching this
+  project's standing Codex-usage policy ("use `codex-reply` for
+  implementation continuation... correction rounds") — instead of "resume
+  the original implementer" from the generic skill template. If two
+  correction rounds don't resolve it, this project's own standing fallback
+  applies (Codex MCP unavailable, or two correction rounds fail): the
+  orchestrating Claude edits directly and discloses the degraded path —
+  replacing SDD's generic "escalate to a more capable model" step, which
+  doesn't map onto a fixed-model external tool.
+- **Phase 3's fix-loop dispatches a fresh `mcp__codex__codex` work unit**
+  per valid CRITICAL/HIGH finding (not a thread-reply — findings can span
+  code from multiple original task dispatches, so there is no single
+  thread to resume), using the same dispatch conventions as Phase 2.
+- The task-level reviewer (spec + quality, dispatched per SDD's own
+  defaults) is unaffected — reviewing a diff doesn't depend on who wrote
+  it, and this role was never pinned to begin with.
+- Phase 3's reviewer dispatch (`codeflow:reviewer`, Fable, never an
+  explicit `model` override) is unaffected.
+
+**Branding fallout:** every place that described codeflow as
+"Fable planner → Opus implementers → Fable reviewer" changes to
+"Fable planner → Codex implementer → Fable reviewer" — plugin.json,
+marketplace.json, README's phase table and Model pinning notes, and both
+`run.md`/`implement.md`'s frontmatter `description` fields.
+
 ## Out of Scope
 
 - No hooks, no MCP servers, no marketplace publishing setup.
