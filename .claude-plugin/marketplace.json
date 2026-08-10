@@ -5,7 +5,7 @@
     {
       "name": "codeflow",
       "source": "./",
-      "description": "Three-phase workflow: Fable planner → Opus implementers → Fable reviewer"
+      "description": "Three-phase workflow: Fable planner → Codex implementer → Fable reviewer"
     }
   ]
 }

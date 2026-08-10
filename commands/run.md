@@ -1,5 +1,5 @@
 ---
-description: Run the full codeflow workflow — Fable planner → Opus implementers → Fable reviewer
+description: Run the full codeflow workflow — Fable planner → Codex implementer → Fable reviewer
 argument-hint: [feature description]
 ---
 
@@ -96,7 +96,7 @@ relay its question to the human, dispatch it again with the answer, repeat.
    record now lives in git. Continue to Phase 2 exactly as the inline path
    would, using the plan at `<path>`.
 
-## Phase 2 — Implementer (Opus subagents)
+## Phase 2 — Implementer (Codex-executed, Claude-reviewed)
 
 1. **Branch gate (mandatory):** before ANY implementation work, confirm the
    development branch with the user. Offer these options:
@@ -108,43 +108,66 @@ relay its question to the human, dispatch it again with the answer, repeat.
    Do NOT start implementation until the user has confirmed. Record the
    confirmed branch point (`git rev-parse HEAD` before the first task
    commit) — Phase 3 uses it as the review base.
-2. Invoke the `superpowers:subagent-driven-development` skill with two
-   substitutions: (a) dispatch every per-task implementation subagent as
-   agent type `codeflow:implementer` instead of a general-purpose agent —
-   if that type is not found, the same agent may be registered under the
-   bare name `implementer`; (b) stop before the skill's own "Final Review"
-   section and do not dispatch its whole-branch reviewer — codeflow's own
-   Phase 3, below, replaces that step entirely. Pass each task's text
-   verbatim as the skill prescribes for the per-task loop.
-3. **Never pass an explicit `model` parameter when dispatching
-   `codeflow:implementer`**, even when the skill's own Model Selection
-   guidance recommends a tier for the task's complexity (e.g. "cheap tier"
-   for a mechanical, fully-specified task). An explicit model override on a
-   dispatch call takes precedence over the agent type's own frontmatter and
-   would silently replace the required Opus pin with whatever tier was
-   picked. Omit the model parameter entirely for this agent type — its
-   frontmatter is the only model directive.
-4. Leave the skill's per-task spec-review and code-review subagents at
-   their defaults — only the coding agents have a pinned model.
-5. All commits stay local. No push, no exceptions.
+2. Follow the `superpowers:subagent-driven-development` skill's structure —
+   workspace/ledger, per-task brief extraction, review-package generation,
+   per-task review, fix loop — with ONE substitution: **the per-task
+   implementer is Codex MCP, not a Claude subagent.** For each task:
+   - Extract the task's brief exactly as the skill's `task-brief` step
+     prescribes.
+   - Dispatch it with `mcp__codex__codex`: `cwd` = the repository root,
+     `model: gpt-5.6-sol`, `sandbox: workspace-write`,
+     `approval-policy: never`, `config.model_reasoning_effort: xhigh`. The
+     `prompt` is the task's brief verbatim plus the scene-setting context
+     the skill's dispatch template calls for (where this task fits,
+     interfaces from earlier tasks).
+   - `developer-instructions` for every dispatch: follow strict TDD (RED —
+     failing test first, confirm it fails for the expected reason — GREEN
+     — minimal implementation, confirm it passes — REFACTOR with tests
+     green); where coverage tooling is configured keep touched-code
+     coverage at or above 80%; run every verification command the task
+     specifies and report actual output; commit with a conventional
+     message; **NEVER run `git push` in any form**; if the task is
+     ambiguous or needs a scope/architecture decision, stop and report the
+     question instead of guessing; report back what was implemented, files
+     changed, the exact test commands and their output, the commit hash,
+     and one status on its own line — DONE, DONE_WITH_CONCERNS, BLOCKED, or
+     NEEDS_CONTEXT — with a one-line reason if not DONE.
+   - Record the returned `structuredContent.threadId`. Per-task correction
+     rounds (findings from the task reviewer, below) use
+     `mcp__codex__codex-reply` on that same thread — not a fresh dispatch —
+     matching this project's standing Codex-usage policy. If two
+     correction rounds on the same thread don't resolve the finding, this
+     project's own standing fallback applies: edit the fix yourself and
+     disclose the degraded path and reason in the task's completion note,
+     rather than escalating to a different model.
+3. Dispatch the per-task reviewer (spec + quality) exactly as the skill
+   prescribes, at its own default model selection — reviewing a diff
+   doesn't depend on who wrote it, and this role was never pinned.
+4. Do not run the skill's own "Final Review" section — codeflow's own
+   Phase 3, below, replaces that step entirely.
+5. All commits stay local. No push, no exceptions — state this in every
+   Codex `developer-instructions` block, not just here.
 
 ## Phase 3 — Reviewer (Fable subagent) + fix loop
 
 1. Follow the `superpowers:requesting-code-review` skill, but dispatch agent
    type `codeflow:reviewer` (bare-name fallback `reviewer`) instead of the
    default code-reviewer agent, and do not pass an explicit `model`
-   parameter for this dispatch — `codeflow:reviewer`'s frontmatter is the
-   only model directive, for the same reason as Phase 2's implementer
-   dispatch. Provide it: the spec path, the plan path, the base ref
-   recorded at the Phase 2 branch gate, and the head ref (current HEAD).
+   parameter for this dispatch — an explicit override takes precedence over
+   the agent type's own frontmatter and would silently replace the
+   required Fable pin. Provide it: the spec path, the plan path, the base
+   ref recorded at the Phase 2 branch gate, and the head ref (current
+   HEAD).
 2. If the reviewer reports CRITICAL or HIGH findings:
    a. Triage them with the `superpowers:receiving-code-review` skill —
       verify each finding against the code before acting; push back on
       invalid findings.
-   b. For each valid CRITICAL/HIGH finding, dispatch one
-      `codeflow:implementer` subagent (no explicit `model` parameter — same
-      reason as Phase 2) to fix it (TDD applies: regression test first,
-      then fix, then commit).
+   b. For each valid CRITICAL/HIGH finding, dispatch a fresh
+      `mcp__codex__codex` work unit to fix it — same dispatch conventions
+      and `developer-instructions` as Phase 2 (TDD: regression test first,
+      then fix, then commit; never push). A fresh dispatch, not a thread
+      reply: a finding can span code from more than one task's original
+      dispatch.
    c. Re-run step 1 with a fresh `codeflow:reviewer`.
 3. **Loop cap:** after 3 review rounds with CRITICAL/HIGH findings still
    present, STOP and report the remaining findings to the user for a

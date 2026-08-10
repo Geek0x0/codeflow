@@ -7,8 +7,8 @@ per-phase model pinning, built entirely on top of the
 | Phase | Role | Model | What happens |
 |-------|------|-------|--------------|
 | 1 | Planner | Fable (main thread, or relayed via a Fable subagent) | `superpowers:brainstorming` → spec, `superpowers:writing-plans` → plan |
-| 2 | Implementer | Opus (subagents) | `superpowers:subagent-driven-development`, one Opus subagent per task, strict TDD |
-| 3 | Reviewer | Fable (subagent) | `superpowers:requesting-code-review` + automatic fix loop (Opus fixes, 3-round cap) |
+| 2 | Implementer | Codex (MCP) | `superpowers:subagent-driven-development`'s structure, Codex executes each task, strict TDD |
+| 3 | Reviewer | Fable (subagent) | `superpowers:requesting-code-review` + automatic fix loop (Codex fixes, 3-round cap) |
 
 ## Requirements
 
@@ -21,7 +21,8 @@ per-phase model pinning, built entirely on top of the
   /plugin marketplace add obra/superpowers-marketplace
   /plugin install superpowers@superpowers-marketplace
   ```
-- Access to the Fable and Opus models.
+- Access to the Fable model, and a working Codex MCP connection for
+  implementation (`mcp__codex__codex` / `mcp__codex__codex-reply`).
 
 ## Install
 
@@ -65,16 +66,16 @@ The full workflow. Blocking gates along the way:
    branch (new `feature/<topic>` branch, current branch, custom name, or a
    worktree).
 5. **Final review** — a Fable reviewer subagent audits the whole diff
-   against the spec; valid CRITICAL/HIGH findings are fixed by Opus
-   subagents and re-reviewed, up to 3 rounds; MEDIUM/LOW findings are
-   reported to you.
+   against the spec; valid CRITICAL/HIGH findings are fixed via Codex and
+   re-reviewed, up to 3 rounds; MEDIUM/LOW findings are reported to you.
 
 ### `/codeflow:implement [plan-path]`
 
 Resume at Phase 2 from an existing plan (after a dead session or context
 compaction). Finds the first unchecked task, confirms the branch, executes,
 then runs the Phase 3 review. No Fable guard: the orchestrator writes no
-code, and subagent models are pinned regardless of the session model.
+code — Codex executes tasks, and the Fable reviewer subagent is pinned
+regardless of the session model.
 
 ### `/codeflow:review [base-ref]`
 
@@ -85,19 +86,25 @@ Phase 3 only: final review of the current branch (default base:
 
 - **Commit only, never push.** No `git push` of any form, no PR-creation
   that pushes. Pushing is always left to you, manually.
-- **Test coverage is first-class.** Implementer subagents follow strict TDD;
-  where coverage tooling exists the floor is 80% on touched code; the final
-  reviewer treats missing/weak tests for new behavior as a HIGH finding.
+- **Test coverage is first-class.** Every Codex implementation dispatch
+  follows strict TDD; where coverage tooling exists the floor is 80% on
+  touched code; the final reviewer treats missing/weak tests for new
+  behavior as a HIGH finding.
 
 ## Model pinning notes
 
-Agent frontmatter uses the model aliases `opus` and `fable`. If your Claude
-Code version does not recognize an alias, edit `agents/*.md` and replace the
-alias with a full model ID (e.g. `claude-opus-5`, `claude-fable-5`).
+Agent frontmatter uses the model alias `fable` (in `agents/reviewer.md` and
+`agents/planner.md`). If your Claude Code version does not recognize the
+alias, edit those two files and replace it with a full model ID (e.g.
+`claude-fable-5`).
 
-Agent types are referenced as `codeflow:implementer` / `codeflow:reviewer`;
+Agent types are referenced as `codeflow:reviewer` / `codeflow:planner`;
 some Claude Code versions register plugin agents under bare names
-(`implementer` / `reviewer`) — the commands mention both.
+(`reviewer` / `planner`) — the commands mention both.
+
+Codex's model (`gpt-5.6-sol`) is not a plugin agent pin — it's specified
+directly on every `mcp__codex__codex` dispatch call in `commands/*.md`, per
+this project's own Codex-usage conventions.
 
 ## Layout
 
@@ -111,7 +118,6 @@ codeflow/
 │   ├── implement.md             # /codeflow:implement
 │   └── review.md                # /codeflow:review
 ├── agents/
-│   ├── implementer.md           # model: opus
 │   ├── reviewer.md              # model: fable
 │   └── planner.md               # model: fable — relay for non-Fable sessions
 └── README.md

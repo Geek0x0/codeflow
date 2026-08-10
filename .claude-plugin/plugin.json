@@ -1,5 +1,5 @@
 {
   "name": "codeflow",
-  "version": "0.2.1",
-  "description": "Three-phase development workflow: Fable planner (brainstorming + writing-plans), Opus implementers (subagent-driven development), Fable reviewer (final review with fix loop). Requires the superpowers plugin."
+  "version": "0.3.0",
+  "description": "Three-phase development workflow: Fable planner (brainstorming + writing-plans), Codex implementer (subagent-driven development), Fable reviewer (final review with fix loop). Requires the superpowers plugin."
 }
