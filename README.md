@@ -6,7 +6,7 @@ per-phase model pinning, built entirely on top of the
 
 | Phase | Role | Model | What happens |
 |-------|------|-------|--------------|
-| 1 | Planner | Fable (main thread) | `superpowers:brainstorming` → spec, `superpowers:writing-plans` → plan |
+| 1 | Planner | Fable (main thread, or relayed via a Fable subagent) | `superpowers:brainstorming` → spec, `superpowers:writing-plans` → plan |
 | 2 | Implementer | Opus (subagents) | `superpowers:subagent-driven-development`, one Opus subagent per task, strict TDD |
 | 3 | Reviewer | Fable (subagent) | `superpowers:requesting-code-review` + automatic fix loop (Opus fixes, 3-round cap) |
 
@@ -48,12 +48,17 @@ marketplace: `/plugin marketplace add /path/to/codeflow`.
 
 The full workflow. Blocking gates along the way:
 
-1. **Model guard** — Phase 1 runs on the main thread, so the session model
-   must be Fable. The command checks and stops if it is not; run
-   `/model fable` and re-invoke. (Plugins cannot switch the main-thread
-   model programmatically; this instruction guard is the enforced-by-text
-   best effort. Subagent models in Phases 2–3 ARE structurally pinned via
-   agent frontmatter.)
+1. **Adaptive Phase 1** — if the session model is Fable, planning runs
+   inline on the main thread, same as before. If it isn't, codeflow relays:
+   it repeatedly dispatches a pinned-Fable `planner` subagent, shows you
+   each question the subagent asks, and sends your answer back — so
+   planning still happens on Fable without you having to `/model fable`
+   first. (Plugins cannot switch the *session's* model programmatically;
+   the relay works around that by pinning a subagent's model instead —
+   the same structural mechanism Phases 2–3 already use via agent
+   frontmatter.) Tip: in projects where you use codeflow regularly, set
+   `{ "model": "claude-fable-5" }` in the project's `.claude/settings.json`
+   so sessions start on Fable and Phase 1 always runs inline.
 2. **Spec approval** — brainstorming writes the spec; you review it.
 3. **Plan approval** — writing-plans writes the plan; you review it.
 4. **Branch gate** — before any code is written, you confirm the development
@@ -107,6 +112,7 @@ codeflow/
 │   └── review.md                # /codeflow:review
 ├── agents/
 │   ├── implementer.md           # model: opus
-│   └── reviewer.md              # model: fable
+│   ├── reviewer.md              # model: fable
+│   └── planner.md               # model: fable — relay for non-Fable sessions
 └── README.md
 ```
