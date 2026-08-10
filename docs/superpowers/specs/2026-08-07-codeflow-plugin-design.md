@@ -21,7 +21,9 @@ superpowers plugin:
    `brainstorming` is inherently interactive. Therefore Phase 1 runs on the
    main thread (session model must be Fable, enforced by an instruction
    guard). Phases 2 and 3 pin models via subagent frontmatter, which is the
-   only mechanism the platform actually enforces.
+   only mechanism the platform actually enforces. (Extended in v0.2 below:
+   when the session isn't Fable, Phase 1 relays through a pinned-Fable
+   subagent instead of hard-stopping.)
 2. **Main command plus recovery entries.** `/codeflow:run` drives all three
    phases in one session. `/codeflow:implement` re-enters at Phase 2 from an
    existing plan file (session died, context compacted). `/codeflow:review`
@@ -137,6 +139,8 @@ with explicit gates (user approval after spec, after plan, branch
 confirmation, final report). States the no-push constraint. Instructs the
 main thread to invoke superpowers skills via the Skill tool and to dispatch
 `codeflow:implementer` / `codeflow:reviewer` agent types where specified.
+Phase 0/1 additionally route to a relay loop dispatching `codeflow:planner`
+when the session model isn't Fable (see v0.2 section below).
 
 ### commands/implement.md
 
@@ -171,6 +175,16 @@ compliance, severity buckets CRITICAL/HIGH/MEDIUM/LOW); treat absent or weak
 tests for new behavior as HIGH; verify claimed test results by running the
 test suite; never modify files; never push.
 
+### agents/planner.md (v0.2)
+
+Frontmatter: `name: planner`, `description` (relay-dispatched Fable planner
+for codeflow Phase 1), `model: fable`, tools: Read, Write, Edit, Bash, Grep,
+Glob (no Skill tool — see v0.2 section below for why). Body: per-dispatch
+protocol (read the transcript, never re-ask an answered question, emit
+exactly one of `QUESTION:`/`SPEC_READY:`/`PLAN_READY:`); condensed,
+independently-authored spec and plan disciplines (not vendored skill text);
+never push.
+
 ## Error Handling & Known Risks
 
 | Risk | Mitigation |
@@ -181,6 +195,8 @@ test suite; never modify files; never push.
 | superpowers not installed | Explicit Phase 0 check, hard stop with install instructions |
 | Review-fix infinite loop | 3-round cap, then report |
 | Session dies mid-implementation | Plan file on disk + SDD per-task checkboxes = natural checkpoint; resume with `/codeflow:implement` |
+| Relay loop never terminates (v0.2) | 30-round cap per stage, then stop and report |
+| `planner` subagent returns malformed output (v0.2) | Orchestrating session shows the raw text to the user and asks how to proceed instead of guessing |
 
 ## Verification Plan
 
@@ -189,16 +205,79 @@ The plugin is pure Markdown/JSON — no unit-testable code. Verification:
 1. **Static:** plugin.json validates against the official plugin schema;
    command/agent frontmatter fields are well-formed.
 2. **Smoke test:** install the plugin locally, run `/codeflow:run` on a toy
-   requirement end-to-end. Confirm: Fable guard fires when the session model
-   is wrong; each gate stops and waits (spec approval, plan approval, branch
-   confirmation); implementer subagents run as Opus; the final reviewer runs
-   as Fable; the fix loop triggers on a seeded defect; no `git push` occurs
-   anywhere; recovery entries `/codeflow:implement` and `/codeflow:review`
-   work from a fresh session.
+   requirement end-to-end on a Fable session (inline Phase 1) and again on a
+   non-Fable session (relayed Phase 1 — confirm each `QUESTION:` reaches the
+   human, `SPEC_READY:`/`PLAN_READY:` are verified before proceeding, and the
+   30-round cap is sane). Confirm: each gate stops and waits (spec approval,
+   plan approval, branch confirmation); implementer subagents run as Opus;
+   the final reviewer runs as Fable; the fix loop triggers on a seeded
+   defect; no `git push` occurs anywhere; recovery entries
+   `/codeflow:implement` and `/codeflow:review` work from a fresh session.
+
+## v0.2 — Relay Planner (adaptive Phase 1)
+
+**New file:** `agents/planner.md` (`model: fable`; tools: Read, Write, Edit,
+Bash, Grep, Glob — no Skill tool, see below).
+
+**Problem:** the v0.1 Phase 0 model guard is a hard stop — if the session
+model isn't Fable when `/codeflow:run` is invoked, the user must manually
+`/model fable` and re-run. Phase 1 can't simply become a subagent outright:
+a dispatched subagent runs to completion and returns one final report, so
+it cannot hold `brainstorming`'s turn-by-turn conversation with the human
+directly (see Key Architectural Decision 1).
+
+**Solution:** Phase 0 routes instead of stopping. Session model is Fable →
+Phase 1 runs inline exactly as in v0.1 (with a mid-phase drift check: if
+the model changes before the spec or plan commit, fall through to the
+relay path instead of committing). Session model is anything else → Phase 1
+runs as a **relay loop**: the orchestrating session (on whatever model)
+repeatedly dispatches a fresh `codeflow:planner` subagent (bare-name
+fallback `planner`), pinned to Fable regardless of the session model —
+mirroring how Phases 2–3 already pin Opus/Fable via agent frontmatter.
+Each dispatch performs exactly one relay round and returns one of three
+signals:
+
+- `QUESTION: <text>` — the session relays this to the human verbatim, waits
+  for the reply, appends both to a transcript file, and dispatches again.
+- `SPEC_READY: <path>` / `PLAN_READY: <path>` — the stage is done; the
+  session verifies the file exists and is committed before proceeding.
+
+**Why stateless re-dispatch, not subagent continuation:** some harnesses
+support resuming a previously-dispatched subagent with its memory intact
+(seen in this project's own build session). codeflow does not rely on that
+— it isn't guaranteed across every Claude Code environment the plugin might
+run in. Each dispatch is instead a fresh `planner` instance that reads a
+transcript file (every question asked and answered so far) and continues
+from there — this only requires basic subagent dispatch, which every
+target environment has.
+
+**Why `agents/planner.md` inlines the discipline instead of invoking
+`superpowers:brainstorming`/`writing-plans` via the Skill tool:** matches
+the existing precedent in `agents/implementer.md` (inlines TDD) and
+`agents/reviewer.md` (inlines the review template) instead of adding an
+unverified new capability — a subagent invoking the Skill tool — to the
+plugin's tool surface. This is an independently-authored, condensed
+discipline for the same job, not a copy of the skill files, so it does not
+violate the "no vendoring" global constraint below.
+
+**Scope-downs versus the inline path:** no visual companion offer (the
+subagent has no browser tool); writing-plans' "which execution approach"
+question is skipped (codeflow always runs subagent-driven).
+
+**Safety valve:** each relay stage (spec, plan) caps at 30 rounds; exceeding
+it stops and reports to the user, mirroring the Phase 3 fix-loop's 3-round
+cap.
+
+**Cost tradeoff:** each human answer costs one additional Fable dispatch.
+Projects that use codeflow often can skip the relay entirely by pinning the
+project to Fable in `.claude/settings.json` (`{ "model": "claude-fable-5" }`,
+documented in README).
 
 ## Out of Scope
 
 - No hooks, no MCP servers, no marketplace publishing setup.
 - No per-task reviewer model pinning (SDD defaults suffice).
-- No programmatic model switching (platform does not support it).
+- No programmatic model switching of the **main thread** (platform does not
+  support it) — v0.2's relay works around this for Phase 1 specifically by
+  pinning a subagent's model instead, not by switching the session itself.
 - No CI integration.
