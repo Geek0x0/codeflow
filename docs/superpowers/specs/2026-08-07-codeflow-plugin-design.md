@@ -273,6 +273,49 @@ Projects that use codeflow often can skip the relay entirely by pinning the
 project to Fable in `.claude/settings.json` (`{ "model": "claude-fable-5" }`,
 documented in README).
 
+## v0.2.1 — Fixes from a live smoke test
+
+A real `/codeflow:run` invocation (non-Fable session, trivial task) surfaced
+three gaps the design review missed, all now fixed in `commands/run.md`,
+`commands/implement.md`, `commands/review.md`, and `agents/planner.md`:
+
+1. **Explicit model override defeats the Opus/Fable pin.** The Agent tool's
+   `model` parameter takes precedence over an agent type's own frontmatter.
+   `superpowers:subagent-driven-development`'s own Model Selection guidance
+   tells the orchestrator to pass an explicit tier per task (e.g. "cheap
+   tier" for a fully-specified, mechanical task) — and codeflow's
+   instructions never said not to. Observed result: the implementer ran on
+   Haiku, not Opus, on a trivial task — silently, with no error. Since SDD's
+   own guidance says most tasks are mechanical when the plan is
+   well-specified (exactly what codeflow's plan format pushes for), this
+   was not an edge case; it was the likely default outcome. Fix: Phase
+   2/3's `codeflow:implementer`/`codeflow:reviewer` dispatch instructions
+   now explicitly say never to pass a `model` parameter, so the agent
+   type's frontmatter is the only model directive.
+2. **SDD's own Final Review duplicated codeflow's Phase 3.** Telling the
+   orchestrator to "invoke the SDD skill" pulled in SDD's own built-in
+   whole-branch review too, since nothing said to skip it. Observed result:
+   two full reviews of the same diff — SDD's own (dispatched on "the most
+   capable model," which the orchestrator judged to be Opus, not Fable) and
+   then codeflow's separate Phase 3 (correctly Fable). Both landed clean
+   this time, but "most capable model" is a self-judged label, not a
+   guarantee — proven by this run picking the wrong model for that
+   redundant step. Fix: Phase 2 now explicitly instructs stopping before
+   SDD's own "Final Review" section.
+3. **Continuation reintroduced the fabrication-provenance risk the relay
+   design was built to avoid.** The orchestrating session used agent
+   continuation (resuming the same `planner` subagent) instead of the
+   fresh-dispatch-with-transcript-file protocol §1b specifies. Because the
+   resumed subagent had Read/Write/Edit tools, it wrote its own "human
+   approved" line into the transcript itself — which a security monitor
+   correctly flagged as indistinguishable from a fabricated-approval
+   pattern (it happened to be genuine, verified against the real
+   conversation, but the artifact alone couldn't prove that). Fix: §1b now
+   states two hard rules explicitly — always dispatch fresh, never resume;
+   the orchestrating session is the sole writer of the transcript files,
+   the planner only reads them. `agents/planner.md`'s Rules section gained
+   the matching prohibition on the subagent side.
+
 ## Out of Scope
 
 - No hooks, no MCP servers, no marketplace publishing setup.
