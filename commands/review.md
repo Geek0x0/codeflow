@@ -38,15 +38,18 @@ re-running planning or implementation.
 
 1. Follow the `superpowers:requesting-code-review` skill, but dispatch agent
    type `codeflow:reviewer` (bare-name fallback `reviewer`) instead of the
-   default code-reviewer agent. Provide it: the spec path, the plan path,
-   the base ref from Setup, and the head ref (current HEAD).
+   default code-reviewer agent, and do not pass an explicit `model`
+   parameter for this dispatch — `codeflow:reviewer`'s frontmatter is the
+   only model directive. Provide it: the spec path, the plan path, the base
+   ref from Setup, and the head ref (current HEAD).
 2. If the reviewer reports CRITICAL or HIGH findings:
    a. Triage them with the `superpowers:receiving-code-review` skill —
       verify each finding against the code before acting; push back on
       invalid findings.
    b. For each valid CRITICAL/HIGH finding, dispatch one
-      `codeflow:implementer` subagent (bare-name fallback `implementer`) to
-      fix it (TDD applies: regression test first, then fix, then commit).
+      `codeflow:implementer` subagent (bare-name fallback `implementer`; no
+      explicit `model` parameter — same reason as above) to fix it (TDD
+      applies: regression test first, then fix, then commit).
    c. Re-run step 1 with a fresh `codeflow:reviewer`.
 3. **Loop cap:** after 3 review rounds with CRITICAL/HIGH findings still
    present, STOP and report the remaining findings to the user for a

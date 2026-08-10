@@ -57,6 +57,21 @@ fallback `planner` if `codeflow:planner` isn't found). Because a subagent
 cannot hold a live conversation, drive it as a relay loop: dispatch it,
 relay its question to the human, dispatch it again with the answer, repeat.
 
+**Two hard rules for this loop:**
+- **Always dispatch a fresh subagent, never resume one.** Even if your
+  environment supports continuing or resuming a previously-dispatched
+  agent with its memory intact, do not use that here — dispatch a brand
+  new `codeflow:planner` instance every round, passing it only the
+  transcript file. This keeps the relay working in any environment and
+  keeps provenance clean (see the next rule).
+- **You are the only writer of the transcript files.** You append every
+  `QUESTION:`/answer pair to the transcript after relaying it to the real
+  human. The planner subagent only ever reads the transcript — it must
+  never write to it itself. A subagent's own file claiming "the human said
+  X" is indistinguishable from a fabricated approval to anyone auditing it
+  later; keeping the write on your side, where the real conversation with
+  the human actually happened, is what makes that claim trustworthy.
+
 1. Set up: derive a short topic slug from the feature description; create
    the workspace directory `.superpowers/codeflow-relay/<slug>/` with an
    empty `spec-transcript.md`.
@@ -93,29 +108,43 @@ relay its question to the human, dispatch it again with the answer, repeat.
    Do NOT start implementation until the user has confirmed. Record the
    confirmed branch point (`git rev-parse HEAD` before the first task
    commit) — Phase 3 uses it as the review base.
-2. Invoke the `superpowers:subagent-driven-development` skill with ONE
-   substitution: dispatch every per-task implementation subagent as agent
-   type `codeflow:implementer` instead of a general-purpose agent. (If that
-   type is not found, the same agent may be registered under the bare name
-   `implementer`.) Pass each task's text verbatim as that skill prescribes.
-3. Leave the skill's per-task spec-review and code-review subagents at their
-   defaults — only the coding agents have a pinned model.
-4. All commits stay local. No push, no exceptions.
+2. Invoke the `superpowers:subagent-driven-development` skill with two
+   substitutions: (a) dispatch every per-task implementation subagent as
+   agent type `codeflow:implementer` instead of a general-purpose agent —
+   if that type is not found, the same agent may be registered under the
+   bare name `implementer`; (b) stop before the skill's own "Final Review"
+   section and do not dispatch its whole-branch reviewer — codeflow's own
+   Phase 3, below, replaces that step entirely. Pass each task's text
+   verbatim as the skill prescribes for the per-task loop.
+3. **Never pass an explicit `model` parameter when dispatching
+   `codeflow:implementer`**, even when the skill's own Model Selection
+   guidance recommends a tier for the task's complexity (e.g. "cheap tier"
+   for a mechanical, fully-specified task). An explicit model override on a
+   dispatch call takes precedence over the agent type's own frontmatter and
+   would silently replace the required Opus pin with whatever tier was
+   picked. Omit the model parameter entirely for this agent type — its
+   frontmatter is the only model directive.
+4. Leave the skill's per-task spec-review and code-review subagents at
+   their defaults — only the coding agents have a pinned model.
+5. All commits stay local. No push, no exceptions.
 
 ## Phase 3 — Reviewer (Fable subagent) + fix loop
 
 1. Follow the `superpowers:requesting-code-review` skill, but dispatch agent
    type `codeflow:reviewer` (bare-name fallback `reviewer`) instead of the
-   default code-reviewer agent. Provide it: the spec path, the plan path,
-   the base ref recorded at the Phase 2 branch gate, and the head ref
-   (current HEAD).
+   default code-reviewer agent, and do not pass an explicit `model`
+   parameter for this dispatch — `codeflow:reviewer`'s frontmatter is the
+   only model directive, for the same reason as Phase 2's implementer
+   dispatch. Provide it: the spec path, the plan path, the base ref
+   recorded at the Phase 2 branch gate, and the head ref (current HEAD).
 2. If the reviewer reports CRITICAL or HIGH findings:
    a. Triage them with the `superpowers:receiving-code-review` skill —
       verify each finding against the code before acting; push back on
       invalid findings.
    b. For each valid CRITICAL/HIGH finding, dispatch one
-      `codeflow:implementer` subagent to fix it (TDD applies: regression
-      test first, then fix, then commit).
+      `codeflow:implementer` subagent (no explicit `model` parameter — same
+      reason as Phase 2) to fix it (TDD applies: regression test first,
+      then fix, then commit).
    c. Re-run step 1 with a fresh `codeflow:reviewer`.
 3. **Loop cap:** after 3 review rounds with CRITICAL/HIGH findings still
    present, STOP and report the remaining findings to the user for a

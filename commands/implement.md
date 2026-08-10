@@ -49,29 +49,43 @@ disk. Use this after a session died or context was compacted mid-run.
    review base for Phase 3: the branch point of the feature branch
    (`git merge-base HEAD <parent-branch>`, or a rev the user provides),
    confirmed with the user.
-2. Invoke the `superpowers:subagent-driven-development` skill with ONE
-   substitution: dispatch every per-task implementation subagent as agent
-   type `codeflow:implementer` instead of a general-purpose agent. (If that
-   type is not found, the same agent may be registered under the bare name
-   `implementer`.) Pass each task's text verbatim as that skill prescribes.
-3. Leave the skill's per-task spec-review and code-review subagents at their
-   defaults — only the coding agents have a pinned model.
-4. All commits stay local. No push, no exceptions.
+2. Invoke the `superpowers:subagent-driven-development` skill with two
+   substitutions: (a) dispatch every per-task implementation subagent as
+   agent type `codeflow:implementer` instead of a general-purpose agent —
+   if that type is not found, the same agent may be registered under the
+   bare name `implementer`; (b) stop before the skill's own "Final Review"
+   section and do not dispatch its whole-branch reviewer — codeflow's own
+   Phase 3, below, replaces that step entirely. Pass each task's text
+   verbatim as the skill prescribes for the per-task loop.
+3. **Never pass an explicit `model` parameter when dispatching
+   `codeflow:implementer`**, even when the skill's own Model Selection
+   guidance recommends a tier for the task's complexity (e.g. "cheap tier"
+   for a mechanical, fully-specified task). An explicit model override on a
+   dispatch call takes precedence over the agent type's own frontmatter and
+   would silently replace the required Opus pin with whatever tier was
+   picked. Omit the model parameter entirely for this agent type — its
+   frontmatter is the only model directive.
+4. Leave the skill's per-task spec-review and code-review subagents at
+   their defaults — only the coding agents have a pinned model.
+5. All commits stay local. No push, no exceptions.
 
 ## Phase 3 — Reviewer (Fable subagent) + fix loop
 
 1. Follow the `superpowers:requesting-code-review` skill, but dispatch agent
    type `codeflow:reviewer` (bare-name fallback `reviewer`) instead of the
-   default code-reviewer agent. Provide it: the spec path, the plan path,
-   the base ref recorded at the Phase 2 branch gate, and the head ref
-   (current HEAD).
+   default code-reviewer agent, and do not pass an explicit `model`
+   parameter for this dispatch — `codeflow:reviewer`'s frontmatter is the
+   only model directive, for the same reason as Phase 2's implementer
+   dispatch. Provide it: the spec path, the plan path, the base ref
+   recorded at the Phase 2 branch gate, and the head ref (current HEAD).
 2. If the reviewer reports CRITICAL or HIGH findings:
    a. Triage them with the `superpowers:receiving-code-review` skill —
       verify each finding against the code before acting; push back on
       invalid findings.
    b. For each valid CRITICAL/HIGH finding, dispatch one
-      `codeflow:implementer` subagent to fix it (TDD applies: regression
-      test first, then fix, then commit).
+      `codeflow:implementer` subagent (no explicit `model` parameter — same
+      reason as Phase 2) to fix it (TDD applies: regression test first,
+      then fix, then commit).
    c. Re-run step 1 with a fresh `codeflow:reviewer`.
 3. **Loop cap:** after 3 review rounds with CRITICAL/HIGH findings still
    present, STOP and report the remaining findings to the user for a

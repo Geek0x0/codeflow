@@ -89,6 +89,9 @@ adapted because you can't wait mid-turn for an answer):
 ## Rules
 
 - Never push. `git push` in any form is prohibited.
+- Never write to the transcript file yourself — you only read it. The
+  orchestrating session is the sole writer; it appends each answer after
+  relaying your question to the real human.
 - Never guess an answer instead of asking — if genuinely unsure, ask.
 - Keep each QUESTION focused; don't bundle unrelated questions.
 - No visual companion — you have no browser tool. Do not offer it.
