@@ -19,17 +19,22 @@ $ARGUMENTS is empty, first ask the user what to build.
 
 ## Phase 0 — Guards
 
-1. **Model guard:** check which model you are running as (your system prompt
-   states it). If you are not Fable (`claude-fable-5` family), STOP and tell
-   the user: "codeflow Phase 1 (planner) requires the Fable model. Run
-   `/model fable`, then re-run `/codeflow:run`." Do not continue.
-2. **Dependency guard:** the superpowers plugin must be available — check
+1. **Dependency guard:** the superpowers plugin must be available — check
    that the skill `superpowers:brainstorming` appears in your available
    skills. If missing, STOP and tell the user to install the superpowers
    plugin first: `/plugin marketplace add obra/superpowers-marketplace`,
    then `/plugin install superpowers@superpowers-marketplace`.
+2. **Model check (routing, not a stop):** check which model you are running
+   as (your system prompt states it). This decides HOW Phase 1 runs below —
+   it is no longer a hard stop:
+   - Fable (`claude-fable-5` family): run Phase 1 **inline** (§1a).
+   - Any other model: run Phase 1 **relayed** through a pinned-Fable
+     subagent (§1b), so the planning work still happens on Fable even
+     though this session isn't.
 
-## Phase 1 — Planner (this session, Fable)
+## Phase 1 — Planner (Fable, inline or relayed per Phase 0)
+
+### §1a — Inline (session model is Fable)
 
 1. Invoke the `superpowers:brainstorming` skill and follow it exactly:
    interactive clarifying questions, design presented for approval, spec
@@ -39,6 +44,42 @@ $ARGUMENTS is empty, first ask the user what to build.
 3. Gate: the user approves the plan. When writing-plans offers execution
    options, this workflow always proceeds subagent-driven — but the branch
    gate in Phase 2 comes first.
+4. **Model drift check:** this phase spans many conversational turns.
+   Re-verify you are still running as Fable immediately before committing
+   the spec and again immediately before committing the plan; if the
+   session model has drifted, STOP and switch to §1b instead of committing.
+
+### §1b — Relayed (session model is not Fable)
+
+The actual design and planning work happens in a `planner` subagent
+(`model: fable`, pinned regardless of this session's model — bare-name
+fallback `planner` if `codeflow:planner` isn't found). Because a subagent
+cannot hold a live conversation, drive it as a relay loop: dispatch it,
+relay its question to the human, dispatch it again with the answer, repeat.
+
+1. Set up: derive a short topic slug from the feature description; create
+   the workspace directory `.superpowers/codeflow-relay/<slug>/` with an
+   empty `spec-transcript.md`.
+2. **Spec relay loop** (cap: 30 rounds — if exceeded, STOP and report to
+   the user): dispatch `codeflow:planner` with stage `spec`, the feature
+   description, today's date, and the transcript file path. Its final
+   message is exactly one of:
+   - `QUESTION: <text>` — show `<text>` to the human verbatim as your own
+     message and wait for their reply. Append both to
+     `spec-transcript.md`, then dispatch again.
+   - `SPEC_READY: <path>` — verify the file exists and `git log -1 --
+     <path>` shows a commit touching it. If either check fails, treat this
+     as a malformed response (see below). Otherwise the spec stage is
+     done; record `<path>`.
+   - Anything else: malformed response — show the human the raw text and
+     ask how to proceed. Do not guess.
+3. **Plan relay loop** (cap: 30 rounds, same malformed-response handling):
+   same shape as step 2, stage `plan`, passing the approved spec path, into
+   a fresh `plan-transcript.md` in the same workspace directory. Terminal
+   signal is `PLAN_READY: <path>`.
+4. Once `PLAN_READY` is confirmed, delete the workspace directory — the
+   record now lives in git. Continue to Phase 2 exactly as the inline path
+   would, using the plan at `<path>`.
 
 ## Phase 2 — Implementer (Opus subagents)
 
