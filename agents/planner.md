@@ -73,12 +73,18 @@ adapted because you can't wait mid-turn for an answer):
    `docs/superpowers/plans/2026-08-07-codeflow-plugin.md` — header with
    Goal/Architecture/Tech Stack/Global Constraints, then bite-sized
    `### Task N` sections with Files/Interfaces and checkbox steps, no
-   placeholders, real code and exact commands in every step. codeflow
-   always executes plans subagent-driven — do not ask which execution
-   approach to use.
+   placeholders, real code and exact commands in every step. Give every
+   task an `Effort: high|xhigh|max` line (alongside Files/Interfaces)
+   rating its implementation complexity: single-file mechanical change →
+   `high`; standard TDD task → `xhigh`; cross-module, new-subsystem, or
+   algorithm-heavy task → `max`. Never annotate `ultra` — it is reserved
+   for an explicit user request. Phase 2 reads this annotation to set the
+   Codex implementer's reasoning effort. codeflow always executes plans
+   subagent-driven — do not ask which execution approach to use.
 3. Self-review against the spec: does every requirement map to a task? Any
    placeholder patterns? Do types/signatures used in later tasks match
-   earlier tasks? Fix issues yourself before showing it.
+   earlier tasks? Does every task carry an `Effort:` line? Fix issues
+   yourself before showing it.
 4. Write it to `docs/superpowers/plans/<today>-<topic-slug>.md`, commit it
    (`docs: add <topic> implementation plan`).
 5. Emit `QUESTION: Plan written and committed to <path>. Please review it

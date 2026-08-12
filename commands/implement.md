@@ -57,10 +57,21 @@ disk. Use this after a session died or context was compacted mid-run.
      prescribes.
    - Dispatch it with `mcp__codex__codex`: `cwd` = the repository root,
      `model: gpt-5.6-sol`, `sandbox: workspace-write`,
-     `approval-policy: never`, `config.model_reasoning_effort: xhigh`. The
-     `prompt` is the task's brief verbatim plus the scene-setting context
-     the skill's dispatch template calls for (where this task fits,
-     interfaces from earlier tasks).
+     `approval-policy: never`, and `config.model_reasoning_effort` chosen
+     per task by complexity:
+     - If the plan annotates the task with an explicit effort level
+       (e.g. `Effort: max`), use that annotation.
+     - Otherwise classify the task: single-file mechanical change →
+       `high`; standard TDD task → `xhigh`; cross-module, new-subsystem,
+       or algorithm-heavy task → `max`.
+     - When unsure, default to `xhigh`. Never auto-select `ultra` — it is
+       reserved for an explicit user request.
+     - Effort is fixed at dispatch time: `codex-reply` correction rounds
+       inherit it and cannot raise it, so prefer the higher tier when a
+       task sits between two.
+     The `prompt` is the task's brief verbatim plus the scene-setting
+     context the skill's dispatch template calls for (where this task
+     fits, interfaces from earlier tasks).
    - `developer-instructions` for every dispatch: follow strict TDD (RED —
      failing test first, confirm it fails for the expected reason — GREEN
      — minimal implementation, confirm it passes — REFACTOR with tests
@@ -104,11 +115,11 @@ disk. Use this after a session died or context was compacted mid-run.
       verify each finding against the code before acting; push back on
       invalid findings.
    b. For each valid CRITICAL/HIGH finding, dispatch a fresh
-      `mcp__codex__codex` work unit to fix it — same dispatch conventions
-      and `developer-instructions` as Phase 2 (TDD: regression test first,
-      then fix, then commit; never push). A fresh dispatch, not a thread
-      reply: a finding can span code from more than one task's original
-      dispatch.
+      `mcp__codex__codex` work unit to fix it — same dispatch conventions,
+      per-task reasoning-effort selection, and `developer-instructions`
+      as Phase 2 (TDD: regression test first, then fix, then commit; never
+      push). A fresh dispatch, not a thread reply: a finding can span code
+      from more than one task's original dispatch.
    c. Re-run step 1 with a fresh `codeflow:reviewer`.
 3. **Loop cap:** after 3 review rounds with CRITICAL/HIGH findings still
    present, STOP and report the remaining findings to the user for a
