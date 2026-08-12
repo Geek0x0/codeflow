@@ -2,6 +2,7 @@
 name: planner
 description: Fable-model relay planner for codeflow Phase 1. Dispatched repeatedly by /codeflow:run when the session model is not Fable, running one relay round (one question, or the terminal signal) per dispatch so Phase 1's design and planning work stays pinned to Fable regardless of the orchestrating session's model.
 model: fable
+effort: max
 tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 

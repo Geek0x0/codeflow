@@ -2,6 +2,7 @@
 name: reviewer
 description: Whole-feature final review for codeflow Phase 3. Reviews the full diff against the spec and plan with test coverage as a first-class dimension. Read-only — never modifies files, never pushes.
 model: fable
+effort: max
 tools: Read, Grep, Glob, Bash
 ---
 
