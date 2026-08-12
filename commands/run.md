@@ -151,9 +151,17 @@ relay its question to the human, dispatch it again with the answer, repeat.
      project's own standing fallback applies: edit the fix yourself and
      disclose the degraded path and reason in the task's completion note,
      rather than escalating to a different model.
-3. Dispatch the per-task reviewer (spec + quality) exactly as the skill
-   prescribes, at its own default model selection — reviewing a diff
-   doesn't depend on who wrote it, and this role was never pinned.
+3. Dispatch the per-task reviewer as agent type `codeflow:task-reviewer`
+   (bare-name fallback `task-reviewer`) instead of an ad-hoc dispatch of
+   the skill's own template — do not pass an explicit `model` parameter
+   for this dispatch: an explicit override takes precedence over the
+   agent type's frontmatter and would silently replace the required
+   `model: opus` / `effort: max` pin, the same failure the skill's own
+   Model Selection section warns about ("an omitted model inherits your
+   session's model"). Provide it the same inputs the skill's task-review
+   step already collects: the task brief file, the implementer's report
+   file, the review-package diff file with base/head SHAs, and the
+   global-constraints block copied verbatim from the plan or spec.
 4. Do not run the skill's own "Final Review" section — codeflow's own
    Phase 3, below, replaces that step entirely.
 5. All commits stay local. No push, no exceptions — state this in every
