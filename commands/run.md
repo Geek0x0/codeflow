@@ -1,5 +1,5 @@
 ---
-description: Run the full codeflow workflow — Fable planner → Codex implementer → Fable reviewer
+description: Run the full codeflow workflow — Fable planner → Codex/DeepSeek implementer → Fable reviewer
 argument-hint: [feature description]
 ---
 
@@ -96,7 +96,7 @@ relay its question to the human, dispatch it again with the answer, repeat.
    record now lives in git. Continue to Phase 2 exactly as the inline path
    would, using the plan at `<path>`.
 
-## Phase 2 — Implementer (Codex-executed, Claude-reviewed)
+## Phase 2 — Implementer (worker-executed, Claude-reviewed)
 
 1. **Branch gate (mandatory):** before ANY implementation work, confirm the
    development branch with the user. Offer these options:
@@ -108,26 +108,44 @@ relay its question to the human, dispatch it again with the answer, repeat.
    Do NOT start implementation until the user has confirmed. Record the
    confirmed branch point (`git rev-parse HEAD` before the first task
    commit) — Phase 3 uses it as the review base.
-2. Follow the `superpowers:subagent-driven-development` skill's structure —
+2. **Worker gate:** before the first task dispatch, ask the user which
+   worker executes Phase 2's implementation units — Codex MCP or DeepSeek
+   MCP — per this project's global Worker Delegation Policy (`WORKER.md`).
+   Treat the answer as the standing preference for every task in this run,
+   including Phase 3's fix-loop dispatches; do not re-ask per task unless
+   the policy's own exception applies. **Exception:** any single task that
+   genuinely needs an MCP tool DeepSeek cannot reach (codebase-memory-mcp,
+   CodeGraph, browser tools, Slack, Jira/Confluence) goes to Codex
+   regardless of the standing preference — tell the user when this
+   happens instead of silently routing around it.
+3. Follow the `superpowers:subagent-driven-development` skill's structure —
    workspace/ledger, per-task brief extraction, review-package generation,
    per-task review, fix loop — with ONE substitution: **the per-task
-   implementer is Codex MCP, not a Claude subagent.** For each task:
+   implementer is the worker chosen at the gate above (Codex MCP or
+   DeepSeek MCP), not a Claude subagent.** For each task:
    - Extract the task's brief exactly as the skill's `task-brief` step
      prescribes.
-   - Dispatch it with `mcp__codex__codex`: `cwd` = the repository root,
-     `model: gpt-5.6-sol`, `sandbox: workspace-write`,
-     `approval-policy: never`, and `config.model_reasoning_effort` chosen
-     per task by complexity:
-     - If the plan annotates the task with an explicit effort level
-       (e.g. `Effort: max`), use that annotation.
-     - Otherwise classify the task: single-file mechanical change →
-       `high`; standard TDD task → `xhigh`; cross-module, new-subsystem,
-       or algorithm-heavy task → `max`.
-     - When unsure, default to `xhigh`. Never auto-select `ultra` — it is
+   - Dispatch it to the chosen worker, `cwd` = the repository root,
+     `sandbox: workspace-write`, `approval-policy: never` for either
+     worker, matching the global policy's Initial Calls conventions:
+     - **Codex** (`mcp__codex__codex`): `model: gpt-5.6-sol`, and
+       `config.model_reasoning_effort` chosen per task by complexity —
+       single-file mechanical change → `high`; standard TDD task →
+       `xhigh`; cross-module, new-subsystem, or algorithm-heavy task →
+       `max`; default `xhigh` when unsure; never auto-select `ultra` —
        reserved for an explicit user request.
-     - Effort is fixed at dispatch time: `codex-reply` correction rounds
-       inherit it and cannot raise it, so prefer the higher tier when a
-       task sits between two.
+     - **DeepSeek** (`deepseek`): omit `model` (ds-mcp's own default)
+       unless the user requests otherwise, and `reasoning-effort` on a
+       two-tier scale — `high` (ds-mcp's own default) for mechanical and
+       standard TDD tasks alike; `max` only for cross-module,
+       new-subsystem, or algorithm-heavy tasks, used sparingly.
+     - If the plan annotates the task with an explicit effort level
+       (e.g. `Effort: max`), use that annotation; for a DeepSeek dispatch,
+       translate the plan's Codex-shaped label to DeepSeek's ladder
+       position (`high`/`xhigh`→`high`, `max`→`max`).
+     - Effort is fixed at dispatch time for either worker: the reply tool
+       (`codex-reply` / `deepseek-reply`) inherits it and cannot raise it,
+       so prefer the higher tier when a task sits between two.
      The `prompt` is the task's brief verbatim plus the scene-setting
      context the skill's dispatch template calls for (where this task
      fits, interfaces from earlier tasks).
@@ -139,19 +157,25 @@ relay its question to the human, dispatch it again with the answer, repeat.
      specifies and report actual output; commit with a conventional
      message; **NEVER run `git push` in any form**; if the task is
      ambiguous or needs a scope/architecture decision, stop and report the
-     question instead of guessing; report back what was implemented, files
-     changed, the exact test commands and their output, the commit hash,
-     and one status on its own line — DONE, DONE_WITH_CONCERNS, BLOCKED, or
-     NEEDS_CONTEXT — with a one-line reason if not DONE.
+     question instead of guessing; for a DeepSeek dispatch, since it has
+     no codebase-memory-mcp/CodeGraph/other-MCP access, either let it use
+     its own shell `rg`/`grep` for exploration beyond the assigned files
+     or complete that discovery yourself first and hand it concrete
+     paths; report back what was implemented, files changed, the exact
+     test commands and their output, the commit hash, and one status on
+     its own line — DONE, DONE_WITH_CONCERNS, BLOCKED, or NEEDS_CONTEXT —
+     with a one-line reason if not DONE.
    - Record the returned `structuredContent.threadId`. Per-task correction
-     rounds (findings from the task reviewer, below) use
-     `mcp__codex__codex-reply` on that same thread — not a fresh dispatch —
-     matching this project's standing Codex-usage policy. If two
-     correction rounds on the same thread don't resolve the finding, this
-     project's own standing fallback applies: edit the fix yourself and
-     disclose the degraded path and reason in the task's completion note,
-     rather than escalating to a different model.
-3. Dispatch the per-task reviewer as agent type `codeflow:task-reviewer`
+     rounds (findings from the task reviewer, below) use `codex-reply` or
+     `deepseek-reply` on that same thread — matching whichever worker
+     started the unit — not a fresh dispatch, per the global Worker
+     Delegation Policy's Thread Continuity rule. If two correction rounds
+     on the same thread don't resolve the finding, the policy's own
+     standing fallback applies regardless of worker: edit the fix
+     yourself and disclose the degraded path and reason in the task's
+     completion note, rather than escalating to a different model or
+     worker.
+4. Dispatch the per-task reviewer as agent type `codeflow:task-reviewer`
    (bare-name fallback `task-reviewer`) instead of an ad-hoc dispatch of
    the skill's own template — do not pass an explicit `model` parameter
    for this dispatch: an explicit override takes precedence over the
@@ -162,10 +186,10 @@ relay its question to the human, dispatch it again with the answer, repeat.
    step already collects: the task brief file, the implementer's report
    file, the review-package diff file with base/head SHAs, and the
    global-constraints block copied verbatim from the plan or spec.
-4. Do not run the skill's own "Final Review" section — codeflow's own
+5. Do not run the skill's own "Final Review" section — codeflow's own
    Phase 3, below, replaces that step entirely.
-5. All commits stay local. No push, no exceptions — state this in every
-   Codex `developer-instructions` block, not just here.
+6. All commits stay local. No push, no exceptions — state this in every
+   worker's `developer-instructions` block, not just here.
 
 ## Phase 3 — Reviewer (Fable subagent) + fix loop
 
@@ -181,12 +205,13 @@ relay its question to the human, dispatch it again with the answer, repeat.
    a. Triage them with the `superpowers:receiving-code-review` skill —
       verify each finding against the code before acting; push back on
       invalid findings.
-   b. For each valid CRITICAL/HIGH finding, dispatch a fresh
-      `mcp__codex__codex` work unit to fix it — same dispatch conventions,
-      per-task reasoning-effort selection, and `developer-instructions`
-      as Phase 2 (TDD: regression test first, then fix, then commit; never
-      push). A fresh dispatch, not a thread reply: a finding can span code
-      from more than one task's original dispatch.
+   b. For each valid CRITICAL/HIGH finding, dispatch a fresh work unit to
+      the chosen worker (per the Phase 2 worker gate) to fix it — same
+      dispatch conventions, per-task reasoning-effort selection, and
+      `developer-instructions` as Phase 2 (TDD: regression test first,
+      then fix, then commit; never push). A fresh dispatch, not a thread
+      reply: a finding can span code from more than one task's original
+      dispatch.
    c. Re-run step 1 with a fresh `codeflow:reviewer`.
 3. **Loop cap:** after 3 review rounds with CRITICAL/HIGH findings still
    present, STOP and report the remaining findings to the user for a
